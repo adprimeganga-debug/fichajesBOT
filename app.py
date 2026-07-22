@@ -111,22 +111,55 @@ def generar_qr(id):
         return "Empleado no encontrado"
 
     nombre = row["nombre"]
-    url = f"http://localhost:5000/fichar?user={nombre}"
 
+    # URL del QR
+    url = f"https://fichajesbot.onrender.com/fichar?user={nombre}"
+
+    # Crear carpeta static si no existe
     if not os.path.exists("static"):
         os.makedirs("static")
 
+    # Generar QR
+    qr_img = qrcode.make(url)
+
+    # Añadir nombre debajo
+    from PIL import Image, ImageDraw, ImageFont
+
+    ancho, alto = qr_img.size
+    espacio_texto = 50
+
+    # Crear imagen más alta
+    nueva_img = Image.new("RGB", (ancho, alto + espacio_texto), "white")
+    nueva_img.paste(qr_img, (0, 0))
+
+    draw = ImageDraw.Draw(nueva_img)
+
+    try:
+        font = ImageFont.truetype("arial.ttf", 24)
+    except:
+        font = ImageFont.load_default()
+
+    texto = nombre
+    tw, th = draw.textsize(texto, font=font)
+    draw.text(((ancho - tw) / 2, alto + 10), texto, fill="black", font=font)
+
     filename = f"qr_{nombre}.png"
     path = os.path.join("static", filename)
-    img = qrcode.make(url)
-    img.save(path)
+    nueva_img.save(path)
 
     return f"""
     <h2>QR de {nombre}</h2>
-    <p>Usa este QR para fichar:</p>
-    <img src='/static/{filename}'><br>
+    <img src='/static/{filename}' style='width:300px'><br><br>
+
+    <button onclick="window.print()" 
+            style="padding:10px 20px; font-size:18px;">
+        Imprimir QR
+    </button>
+
+    <br><br>
     <a href='/admin/empleados'>Volver</a>
     """
+
 
 # ---------- FICHAR ----------
 
