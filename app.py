@@ -104,66 +104,44 @@ def eliminar_empleado(id):
 
 @app.route("/admin/generar_qr/<int:id>")
 def generar_qr(id):
-    try:
-        conn = db()
-        c = conn.cursor()
-        c.execute("SELECT nombre FROM empleados WHERE id=?", (id,))
-        row = c.fetchone()
-        conn.close()
+    conn = db()
+    c = conn.cursor()
+    c.execute("SELECT nombre FROM empleados WHERE id=?", (id,))
+    row = c.fetchone()
+    conn.close()
 
-        if not row:
-            return "Empleado no encontrado"
+    if not row:
+        return "Empleado no encontrado"
 
-        nombre = row["nombre"]
+    nombre = row["nombre"]
 
-        # URL del QR (Render)
-        url = f"https://fichajesbot.onrender.com/fichar?user={nombre}"
+    # URL del QR (Render)
+    url = f"https://fichajesbot.onrender.com/fichar?user={nombre}"
 
-        # Crear carpeta static si no existe
-        if not os.path.exists("static"):
-            os.makedirs("static")
+    # Crear carpeta static si no existe
+    if not os.path.exists("static"):
+        os.makedirs("static")
 
-        # Generar QR
-        qr_img = qrcode.make(url)
+    # Generar QR (solo imagen, sin texto dentro)
+    qr_img = qrcode.make(url)
+    filename = f"qr_{nombre}.png"
+    path = os.path.join("static", filename)
+    qr_img.save(path)
 
-        # Añadir nombre debajo sin calcular tamaño del texto
-        ancho, alto = qr_img.size
-        espacio_texto = 60
+    # Nombre debajo en HTML + botón de imprimir
+    return f"""
+    <h2>QR de {nombre}</h2>
+    <img src='/static/{filename}' style='width:300px'><br>
+    <h3>{nombre}</h3>
 
-        nueva_img = Image.new("RGB", (ancho, alto + espacio_texto), "white")
-        nueva_img.paste(qr_img, (0, 0))
+    <button onclick="window.print()" 
+            style="padding:10px 20px; font-size:18px;">
+        Imprimir QR
+    </button>
 
-        draw = ImageDraw.Draw(nueva_img)
-
-        # Fuente segura para Render
-        try:
-            font = ImageFont.truetype("arial.ttf", 28)
-        except:
-            font = ImageFont.load_default()
-
-        # POSICIÓN FIJA (sin cálculos, sin anchor, sin bbox)
-        # Render SIEMPRE soporta esto
-        draw.text((10, alto + 10), nombre, fill="black", font=font)
-
-        filename = f"qr_{nombre}.png"
-        path = os.path.join("static", filename)
-        nueva_img.save(path)
-
-        return f"""
-        <h2>QR de {nombre}</h2>
-        <img src='/static/{filename}' style='width:300px'><br><br>
-
-        <button onclick="window.print()" 
-                style="padding:10px 20px; font-size:18px;">
-            Imprimir QR
-        </button>
-
-        <br><br>
-        <a href='/admin/empleados'>Volver</a>
-        """
-    except Exception as e:
-        return f"Error generando el QR: {e}"
-
+    <br><br>
+    <a href='/admin/empleados'>Volver</a>
+    """
 
 
 # ---------- FICHAR AUTOMÁTICO ----------
