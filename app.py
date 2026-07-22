@@ -3,14 +3,12 @@ import sqlite3
 from datetime import datetime, date, timedelta
 import qrcode
 import os
-
-from PIL import Image, ImageDraw, ImageFont
+import pytz
 
 app = Flask(__name__)
 
 DB_PATH = "fichajes.db"
-HORAS_DIA = 9
-HORAS_SEMANA = 54
+HORAS_DIA = 9  # jornada diaria
 
 # ---------- DB ----------
 
@@ -46,6 +44,8 @@ def init_db():
 
 init_db()
 
+TZ = pytz.timezone("Europe/Madrid")
+
 # ---------- HOME / ADMIN ----------
 
 @app.route("/")
@@ -56,7 +56,6 @@ def index():
         <li><a href='/admin/empleados'>Empleados</a></li>
         <li><a href='/admin/fichajes'>Fichajes</a></li>
         <li><a href='/admin/horas'>Horas diarias</a></li>
-        <li><a href='/admin/horas_semanales'>Horas semanales</a></li>
     </ul>
     """
 
@@ -122,13 +121,12 @@ def generar_qr(id):
     if not os.path.exists("static"):
         os.makedirs("static")
 
-    # Generar QR (solo imagen, sin texto dentro)
+    # Generar QR (solo imagen)
     qr_img = qrcode.make(url)
     filename = f"qr_{nombre}.png"
     path = os.path.join("static", filename)
     qr_img.save(path)
 
-    # Nombre debajo en HTML + botón de imprimir
     return f"""
     <h2>QR de {nombre}</h2>
     <img src='/static/{filename}' style='width:300px'><br>
@@ -142,7 +140,6 @@ def generar_qr(id):
     <br><br>
     <a href='/admin/empleados'>Volver</a>
     """
-
 
 # ---------- FICHAR AUTOMÁTICO ----------
 
@@ -178,7 +175,7 @@ def fichar():
     else:
         tipo = "entrada"
 
-    fecha_hora = datetime.now().isoformat(timespec="seconds")
+    fecha_hora = datetime.now(TZ).isoformat(timespec="seconds")
     c.execute(
         "INSERT INTO fichajes (empleado_id, tipo, fecha_hora) VALUES (?, ?, ?)",
         (empleado_id, tipo, fecha_hora)
@@ -217,7 +214,7 @@ def ver_fichajes():
     html += "</table><a href='/'>Volver</a>"
     return html
 
-# ---------- CÁLCULO DIARIO ----------
+# ---------- CÁLCULO DIARIO CON PAUSAS ----------
 
 def calcular_dia(empleado_id, fecha_str):
     conn = db()
@@ -236,6 +233,8 @@ def calcular_dia(empleado_id, fecha_str):
 
     for r in registros:
         fh = datetime.fromisoformat(r["fecha_hora"])
+        fh = fh.astimezone(TZ)
+
         if r["tipo"] == "entrada":
             entrada = fh
         elif r["tipo"] == "salida":
@@ -244,7 +243,40 @@ def calcular_dia(empleado_id, fecha_str):
     if not entrada or not salida:
         return None
 
+    # Pausas del día (comida y cena)
+    dia = entrada.date()
+    comida_ini = TZ.localize(datetime.combine(dia, datetime.strptime("12:30", "%H:%M").time()))
+    comida_fin = TZ.localize(datetime.combine(dia, datetime.strptime("13:00", "%H:%M").time()))
+    cena_ini = TZ.localize(datetime.combine(dia, datetime.strptime("19:00", "%H:%M").time()))
+    cena_fin = TZ.localize(datetime.combine(dia, datetime.strptime("19:30", "%H:%M").time()))
+
+    # Ajustar entrada si cae dentro de pausa
+    if comida_ini <= entrada <= comida_fin:
+        entrada = comida_fin
+    if cena_ini <= entrada <= cena_fin:
+        entrada = cena_fin
+
+    # Ajustar salida si cae dentro de pausa
+    if comida_ini <= salida <= comida_fin:
+        salida = comida_ini
+    if cena_ini <= salida <= cena_fin:
+        salida = cena_ini
+
+    # Calcular horas trabajadas
     horas = (salida - entrada).total_seconds() / 3600.0
+
+    pausa_total = 0.0
+
+    # Pausa comida dentro del rango trabajado
+    if entrada < comida_ini and salida > comida_fin:
+        pausa_total += 0.5  # 30 minutos
+
+    # Pausa cena dentro del rango trabajado
+    if entrada < cena_ini and salida > cena_fin:
+        pausa_total += 0.5  # 30 minutos
+
+    horas -= pausa_total
+
     extra = max(0, horas - HORAS_DIA)
     debe = max(0, HORAS_DIA - horas)
 
@@ -277,46 +309,8 @@ def horas_diarias():
     html += "</table><a href='/'>Volver</a>"
     return html
 
-# ---------- CÁLCULO SEMANAL ----------
-
-def rango_semana(fecha_base=None):
-    if fecha_base is None:
-        fecha_base = date.today()
-    lunes = fecha_base - timedelta(days=fecha_base.weekday())
-    dias = [lunes + timedelta(days=i) for i in range(6)]
-    return dias
-
-@app.route("/admin/horas_semanales")
-def horas_semanales():
-    dias = rango_semana()
-    conn = db()
-    c = conn.cursor()
-    c.execute("SELECT * FROM empleados ORDER BY nombre")
-    empleados = c.fetchall()
-    conn.close()
-
-    html = "<h2>Horas semanales</h2>"
-    html += "<p>Semana: " + ", ".join(d.isoformat() for d in dias) + "</p>"
-    html += "<table border='1'><tr><th>Empleado</th><th>Total semana</th><th>Extra</th><th>Debe</th></tr>"
-
-    for emp in empleados:
-        total = 0.0
-        for d in dias:
-            res = calcular_dia(emp["id"], d.isoformat())
-            if res:
-                total += res["horas_trabajadas"]
-
-        extra = max(0, total - HORAS_SEMANA)
-        debe = max(0, HORAS_SEMANA - total)
-
-        html += f"<tr><td>{emp['nombre']}</td><td>{round(total,2)}</td><td>{round(extra,2)}</td><td>{round(debe,2)}</td></tr>"
-
-    html += "</table><a href='/'>Volver</a>"
-    return html
-
 # ---------- MAIN ----------
 
 if __name__ == "__main__":
-    import os
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
