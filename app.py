@@ -104,59 +104,65 @@ def eliminar_empleado(id):
 
 @app.route("/admin/generar_qr/<int:id>")
 def generar_qr(id):
-    conn = db()
-    c = conn.cursor()
-    c.execute("SELECT nombre FROM empleados WHERE id=?", (id,))
-    row = c.fetchone()
-    conn.close()
-
-    if not row:
-        return "Empleado no encontrado"
-
-    nombre = row["nombre"]
-
-    # URL del QR (Render)
-    url = f"https://fichajesbot.onrender.com/fichar?user={nombre}"
-
-    if not os.path.exists("static"):
-        os.makedirs("static")
-
-    # Generar QR
-    qr_img = qrcode.make(url)
-
-    # Añadir nombre debajo
-    ancho, alto = qr_img.size
-    espacio_texto = 60
-
-    nueva_img = Image.new("RGB", (ancho, alto + espacio_texto), "white")
-    nueva_img.paste(qr_img, (0, 0))
-
-    draw = ImageDraw.Draw(nueva_img)
-
     try:
-        font = ImageFont.truetype("arial.ttf", 28)
-    except:
-        font = ImageFont.load_default()
+        conn = db()
+        c = conn.cursor()
+        c.execute("SELECT nombre FROM empleados WHERE id=?", (id,))
+        row = c.fetchone()
+        conn.close()
 
-    tw, th = draw.textsize(nombre, font=font)
-    draw.text(((ancho - tw) / 2, alto + 10), nombre, fill="black", font=font)
+        if not row:
+            return "Empleado no encontrado"
 
-    filename = f"qr_{nombre}.png"
-    path = os.path.join("static", filename)
-    nueva_img.save(path)
+        nombre = row["nombre"]
 
-    return f"""
-    <h2>QR de {nombre}</h2>
-    <img src='/static/{filename}' style='width:300px'><br><br>
+        # URL del QR (Render)
+        url = f"https://fichajesbot.onrender.com/fichar?user={nombre}"
 
-    <button onclick="window.print()" 
-            style="padding:10px 20px; font-size:18px;">
-        Imprimir QR
-    </button>
+        # Crear carpeta static si no existe
+        if not os.path.exists("static"):
+            os.makedirs("static")
 
-    <br><br>
-    <a href='/admin/empleados'>Volver</a>
-    """
+        # Generar QR
+        qr_img = qrcode.make(url)
+
+        # Añadir nombre debajo
+        ancho, alto = qr_img.size
+        espacio_texto = 60
+
+        nueva_img = Image.new("RGB", (ancho, alto + espacio_texto), "white")
+        nueva_img.paste(qr_img, (0, 0))
+
+        draw = ImageDraw.Draw(nueva_img)
+
+        # Intentar usar arial, si no, fuente por defecto
+        try:
+            font = ImageFont.truetype("arial.ttf", 28)
+        except Exception:
+            font = ImageFont.load_default()
+
+        tw, th = draw.textsize(nombre, font=font)
+        draw.text(((ancho - tw) / 2, alto + 10), nombre, fill="black", font=font)
+
+        filename = f"qr_{nombre}.png"
+        path = os.path.join("static", filename)
+        nueva_img.save(path)
+
+        return f"""
+        <h2>QR de {nombre}</h2>
+        <img src='/static/{filename}' style='width:300px'><br><br>
+
+        <button onclick="window.print()" 
+                style="padding:10px 20px; font-size:18px;">
+            Imprimir QR
+        </button>
+
+        <br><br>
+        <a href='/admin/empleados'>Volver</a>
+        """
+    except Exception as e:
+        return f"Error generando el QR: {e}"
+
 
 # ---------- FICHAR AUTOMÁTICO ----------
 
