@@ -141,7 +141,11 @@ def generar_qr(id):
         except Exception:
             font = ImageFont.load_default()
 
-        tw, th = draw.textsize(nombre, font=font)
+        # CALCULO SEGURO DEL TAMAÑO DEL TEXTO
+        bbox = draw.textbbox((0, 0), nombre, font=font)
+        tw = bbox[2] - bbox[0]
+        th = bbox[3] - bbox[1]
+
         draw.text(((ancho - tw) / 2, alto + 10), nombre, fill="black", font=font)
 
         filename = f"qr_{nombre}.png"
@@ -162,6 +166,7 @@ def generar_qr(id):
         """
     except Exception as e:
         return f"Error generando el QR: {e}"
+
 
 
 # ---------- FICHAR AUTOMÁTICO ----------
