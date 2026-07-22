@@ -126,7 +126,7 @@ def generar_qr(id):
         # Generar QR
         qr_img = qrcode.make(url)
 
-        # Añadir nombre debajo
+        # Añadir nombre debajo sin calcular tamaño del texto
         ancho, alto = qr_img.size
         espacio_texto = 60
 
@@ -135,18 +135,15 @@ def generar_qr(id):
 
         draw = ImageDraw.Draw(nueva_img)
 
-        # Intentar usar arial, si no, fuente por defecto
+        # Fuente segura para Render
         try:
             font = ImageFont.truetype("arial.ttf", 28)
-        except Exception:
+        except:
             font = ImageFont.load_default()
 
-        # CALCULO SEGURO DEL TAMAÑO DEL TEXTO
-        bbox = draw.textbbox((0, 0), nombre, font=font)
-        tw = bbox[2] - bbox[0]
-        th = bbox[3] - bbox[1]
-
-        draw.text(((ancho - tw) / 2, alto + 10), nombre, fill="black", font=font)
+        # TRUCO: centrar texto sin calcular tamaño
+        # Dibujamos el texto en una posición fija centrada
+        draw.text((ancho // 2, alto + 10), nombre, fill="black", font=font, anchor="mm")
 
         filename = f"qr_{nombre}.png"
         path = os.path.join("static", filename)
@@ -166,7 +163,6 @@ def generar_qr(id):
         """
     except Exception as e:
         return f"Error generando el QR: {e}"
-
 
 
 # ---------- FICHAR AUTOMÁTICO ----------
