@@ -141,9 +141,9 @@ def generar_qr(id):
         except:
             font = ImageFont.load_default()
 
-        # TRUCO: centrar texto sin calcular tamaño
-        # Dibujamos el texto en una posición fija centrada
-        draw.text((ancho // 2, alto + 10), nombre, fill="black", font=font, anchor="mm")
+        # POSICIÓN FIJA (sin cálculos, sin anchor, sin bbox)
+        # Render SIEMPRE soporta esto
+        draw.text((10, alto + 10), nombre, fill="black", font=font)
 
         filename = f"qr_{nombre}.png"
         path = os.path.join("static", filename)
@@ -163,6 +163,7 @@ def generar_qr(id):
         """
     except Exception as e:
         return f"Error generando el QR: {e}"
+
 
 
 # ---------- FICHAR AUTOMÁTICO ----------
