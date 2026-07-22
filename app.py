@@ -4,7 +4,20 @@ from datetime import datetime, date, timedelta
 import qrcode
 import os
 
+from PIL import Image, ImageDraw, ImageFont
+
+app = Flask(__name__)
+
 DB_PATH = "fichajes.db"
+HORAS_DIA = 9
+HORAS_SEMANA = 54
+
+# ---------- DB ----------
+
+def db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
@@ -32,16 +45,6 @@ def init_db():
     conn.close()
 
 init_db()
-app = Flask(__name__)
-
-DB_PATH = "fichajes.db"
-HORAS_DIA = 9
-HORAS_SEMANA = 54
-
-def db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
 
 # ---------- HOME / ADMIN ----------
 
@@ -112,10 +115,9 @@ def generar_qr(id):
 
     nombre = row["nombre"]
 
-    # URL del QR
+    # URL del QR (Render)
     url = f"https://fichajesbot.onrender.com/fichar?user={nombre}"
 
-    # Crear carpeta static si no existe
     if not os.path.exists("static"):
         os.makedirs("static")
 
@@ -123,25 +125,21 @@ def generar_qr(id):
     qr_img = qrcode.make(url)
 
     # Añadir nombre debajo
-    from PIL import Image, ImageDraw, ImageFont
-
     ancho, alto = qr_img.size
-    espacio_texto = 50
+    espacio_texto = 60
 
-    # Crear imagen más alta
     nueva_img = Image.new("RGB", (ancho, alto + espacio_texto), "white")
     nueva_img.paste(qr_img, (0, 0))
 
     draw = ImageDraw.Draw(nueva_img)
 
     try:
-        font = ImageFont.truetype("arial.ttf", 24)
+        font = ImageFont.truetype("arial.ttf", 28)
     except:
         font = ImageFont.load_default()
 
-    texto = nombre
-    tw, th = draw.textsize(texto, font=font)
-    draw.text(((ancho - tw) / 2, alto + 10), texto, fill="black", font=font)
+    tw, th = draw.textsize(nombre, font=font)
+    draw.text(((ancho - tw) / 2, alto + 10), nombre, fill="black", font=font)
 
     filename = f"qr_{nombre}.png"
     path = os.path.join("static", filename)
@@ -160,10 +158,9 @@ def generar_qr(id):
     <a href='/admin/empleados'>Volver</a>
     """
 
+# ---------- FICHAR AUTOMÁTICO ----------
 
-# ---------- FICHAR ----------
-
-@app.route("/fichar", methods=["GET", "POST"])
+@app.route("/fichar")
 def fichar():
     empleado_nombre = request.args.get("user")
     if not empleado_nombre:
@@ -171,34 +168,46 @@ def fichar():
 
     conn = db()
     c = conn.cursor()
-    c.execute("SELECT * FROM empleados WHERE nombre=?", (empleado_nombre,))
-    emp = c.fetchone()
 
+    c.execute("SELECT id FROM empleados WHERE nombre=?", (empleado_nombre,))
+    emp = c.fetchone()
     if not emp:
         conn.close()
         return "Empleado no encontrado"
 
     empleado_id = emp["id"]
 
-    if request.method == "POST":
-        tipo = request.form["tipo"]
-        fecha_hora = datetime.now().isoformat(timespec="seconds")
+    # Último fichaje
+    c.execute("""
+        SELECT tipo, fecha_hora 
+        FROM fichajes 
+        WHERE empleado_id=? 
+        ORDER BY fecha_hora DESC 
+        LIMIT 1
+    """, (empleado_id,))
+    ultimo = c.fetchone()
 
-        c.execute(
-            "INSERT INTO fichajes (empleado_id, tipo, fecha_hora) VALUES (?, ?, ?)",
-            (empleado_id, tipo, fecha_hora),
-        )
-        conn.commit()
-        conn.close()
-        return f"Fichaje {tipo} registrado para {empleado_nombre}"
+    if ultimo and ultimo["tipo"] == "entrada":
+        tipo = "salida"
+    else:
+        tipo = "entrada"
 
+    fecha_hora = datetime.now().isoformat(timespec="seconds")
+    c.execute(
+        "INSERT INTO fichajes (empleado_id, tipo, fecha_hora) VALUES (?, ?, ?)",
+        (empleado_id, tipo, fecha_hora)
+    )
+    conn.commit()
     conn.close()
+
     return f"""
-    <h2>Fichaje de {empleado_nombre}</h2>
-    <form method="POST">
-        <button name="tipo" value="entrada">Entrar</button>
-        <button name="tipo" value="salida">Salir</button>
-    </form>
+    <h2>Fichaje automático realizado</h2>
+    <p>Empleado: <b>{empleado_nombre}</b></p>
+    <p>Acción: <b>{tipo.upper()}</b></p>
+    <p>Hora: {fecha_hora}</p>
+    <script>
+        setTimeout(() => window.close(), 2000);
+    </script>
     """
 
 # ---------- LISTA FICHAJES ----------
@@ -287,7 +296,6 @@ def horas_diarias():
 def rango_semana(fecha_base=None):
     if fecha_base is None:
         fecha_base = date.today()
-    # asumimos semana lunes-sábado
     lunes = fecha_base - timedelta(days=fecha_base.weekday())
     dias = [lunes + timedelta(days=i) for i in range(6)]
     return dias
@@ -323,5 +331,6 @@ def horas_semanales():
 # ---------- MAIN ----------
 
 if __name__ == "__main__":
+    import os
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
