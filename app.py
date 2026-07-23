@@ -7,7 +7,7 @@ import pytz
 
 app = Flask(__name__)
 
-DB_PATH = "fichajes.db"
+DB_PATH = "/var/fichajes.db"
 HORAS_DIA = 9  # jornada diaria
 
 # ---------- DB ----------
