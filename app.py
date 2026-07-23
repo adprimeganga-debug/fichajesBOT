@@ -1,14 +1,17 @@
 from flask import Flask, request, redirect, url_for
 import sqlite3
-from datetime import datetime, date, timedelta
+from datetime import datetime, date
 import qrcode
 import os
 import pytz
 
 app = Flask(__name__)
 
+# BASE DE DATOS PERSISTENTE EN RENDER
 DB_PATH = "/var/fichajes.db"
+
 HORAS_DIA = 9  # jornada diaria
+TZ = pytz.timezone("Europe/Madrid")
 
 # ---------- DB ----------
 
@@ -43,8 +46,6 @@ def init_db():
     conn.close()
 
 init_db()
-
-TZ = pytz.timezone("Europe/Madrid")
 
 # ---------- HOME / ADMIN ----------
 
