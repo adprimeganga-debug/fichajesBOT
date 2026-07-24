@@ -176,7 +176,8 @@ def fichar():
     else:
         tipo = "entrada"
 
-    fecha_hora = datetime.now(TZ).isoformat(timespec="seconds")
+    fecha_hora = datetime.now(TZ).astimezone(TZ).isoformat()
+
     c.execute(
         "INSERT INTO fichajes (empleado_id, tipo, fecha_hora) VALUES (?, ?, ?)",
         (empleado_id, tipo, fecha_hora)
