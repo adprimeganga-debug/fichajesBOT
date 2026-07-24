@@ -234,8 +234,7 @@ def calcular_dia(empleado_id, fecha_str):
     salida = None
 
     for r in registros:
-        fh = datetime.fromisoformat(r["fecha_hora"])
-        fh = fh.astimezone(TZ)
+        fh = datetime.fromisoformat(r["fecha_hora"]).astimezone(TZ)
 
         if r["tipo"] == "entrada":
             entrada = fh
